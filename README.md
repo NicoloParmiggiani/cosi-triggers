@@ -6,7 +6,7 @@ Python emulation and QA for the COSI GRB onboard trigger algorithm, aligned with
 
 ## Data
 
-Available here https://drive.google.com/file/d/19y_4YvCpF48XrMaYZlpl6rAgRoNbbN8T/view?usp=drive_link.
+Available here [https://drive.google.com/file/d/19y_4YvCpF48XrMaYZlpl6rAgRoNbbN8T/view?usp=drive_link](https://drive.google.com/drive/folders/1oOoow-dy0ER-ap2B8gVr6YJ0_Sqa5i03?usp=share_link).
 Download and extract at the top repo level so that the ACS binned data lives under
 `sgrbs-scaled-background-binned-acs/` (one `flux-*` folder per band and `a`/`b` variant,
 each containing `combined_acs_data.hdf5` and `events.csv`).
