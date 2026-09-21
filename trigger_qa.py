@@ -37,7 +37,7 @@ curve from ``gbm_64ms.txt`` (flux vs recovery) is drawn and labeled
 ``Fermi-GBM 64 ms``.
 
 Supplementary tab-separated CSVs next to each ``events.csv`` under
-``sgrbs-background-binned-acs/<dataset>/`` (named like ``flux-10-100a.csv``)
+``sgrbs-scaled-background-binned-acs/<dataset>/`` (named like ``flux-10-100a.csv``)
 provide peak photon flux for **10–1000 keV** and **50–300 keV**; those columns
 are joined by ``Event`` id to each row of ``events-matched.csv`` for the
 corresponding brightness-summary figures.
@@ -46,10 +46,11 @@ If ACS defines a flux suite (``trigger_outputs.expected_acs_dataset_names``),
 **no** QA runs until **every dataset in the current scope** has a folder under the
 run with ``events-matched.csv``. **Fast mode** (default) scopes QA to ``flux-1-10``
 and ``flux-10-100`` ``a``/``b`` only; pass ``--complete`` on the command line to
-require the full ACS flux suite. With no ACS catalog, the same completeness rule
+require the full ACS flux suite. Pass ``--acs-root`` to use a different ACS tree.
+With no ACS catalog, the same completeness rule
 applies to every subfolder of the run directory.
 
-Run this file from the IDE or with optional ``--complete`` (Run Python File / CLI).
+Run this file from the IDE or with optional ``--complete`` / ``--acs-root``.
 
 Time offsets in this script use trigger time minus (Start time + Peak start time)
 per row — not the cross-match reference used in trigger_match.py.
@@ -69,7 +70,7 @@ import trigger_match
 import trigger_outputs
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ACS_ROOT = os.path.join(_SCRIPT_DIR, 'sgrbs-background-binned-acs')
+ACS_ROOT = trigger_outputs.default_acs_root(_SCRIPT_DIR)
 # Reference curve: columns = peak photon flux (ph/cm²/s), 50–300 keV | recovery efficiency
 GBM_64MS_FILE = 'gbm_64ms.txt'
 GBM_OVERLAY_LABEL = 'Fermi-GBM 64 ms'
@@ -671,10 +672,14 @@ def _find_binned_cache_dir(acs_root: str, dataset_name: str) -> str | None:
     Directory holding the per-detector binned-count caches written by
     ``trigger_acs.py`` (``bgo_<det>_binned_counts_gamma_channel.npy`` and
     ``bin_times.npy``) — i.e. the folder next to ``combined_acs_data.hdf5`` under
-    ``acs_root/<dataset>/*/``. Returns None if the cache is not present.
+    ``acs_root/<dataset>/``. Returns None if the cache is not present.
     """
     import glob
 
+    direct = os.path.join(acs_root, dataset_name, 'bin_times.npy')
+    if os.path.isfile(direct):
+        return os.path.dirname(direct)
+    # Legacy nested layout: acs_root/<dataset>/*/bin_times.npy
     pattern = os.path.join(acs_root, dataset_name, '*', 'bin_times.npy')
     found = sorted(glob.glob(pattern))
     return os.path.dirname(found[0]) if found else None
@@ -1467,7 +1472,7 @@ def load_catalog_qa_vectors(path_matched: str) -> tuple[
 
 
 def find_supplementary_flux_csv(acs_root: str, dataset_name: str) -> str | None:
-    """``.../<dataset>/<band>/flux-<band><suffix>.csv`` next to ``events.csv``."""
+    """``.../<dataset>/flux-<band><suffix>.csv`` next to ``events.csv``."""
     events_path = trigger_outputs.find_events_csv(acs_root, dataset_name)
     if not events_path:
         return None
@@ -2379,10 +2384,14 @@ def qa_one_dataset(
 
 
 def main():
+    global ACS_ROOT
     run_dir = trigger_outputs.read_current_run(_SCRIPT_DIR)
     print(f'Current run directory: {run_dir}\n')
 
-    complete = trigger_outputs.parse_run_scope_argv()
+    scope = trigger_outputs.parse_run_scope_argv(script_dir=_SCRIPT_DIR)
+    complete = scope.complete
+    ACS_ROOT = scope.acs_root
+    print(f'ACS root: {ACS_ROOT}')
     expected = trigger_outputs.expected_acs_dataset_names(ACS_ROOT)
     suite = trigger_outputs.acs_datasets_for_mode(ACS_ROOT, complete=complete)
     spur_canonical = (
@@ -2400,9 +2409,9 @@ def main():
                 'Re-run with ``--complete`` for all flux bands, or add those catalogs.'
             )
         names_loop = suite
-        scope = 'all ACS flux datasets (--complete)' if complete else 'fast (flux-1-10, flux-10-100 only)'
+        qa_scope = 'all ACS flux datasets (--complete)' if complete else 'fast (flux-1-10, flux-10-100 only)'
         print(
-            f'QA scope: {scope} — {len(suite)} dataset(s) under {ACS_ROOT}.\n'
+            f'QA scope: {qa_scope} — {len(suite)} dataset(s) under {ACS_ROOT}.\n'
         )
         missing = trigger_outputs.missing_flux_outputs_for_qa(
             run_dir, ACS_ROOT, EVENTS_MATCHED, complete=complete

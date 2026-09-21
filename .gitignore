@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 outputs/
 sgrbs-background-binned-acs/
+sgrbs-scaled-background-binned-acs/
 *.npy
 .DS_Store
 Thumbs.db

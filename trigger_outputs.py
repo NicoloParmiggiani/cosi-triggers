@@ -13,6 +13,7 @@ import os
 import re
 from collections.abc import Sequence
 from datetime import datetime
+from typing import NamedTuple
 
 
 def _script_dir_here() -> str:
@@ -61,29 +62,38 @@ def read_current_run(script_dir: str | None = None) -> str:
     return line
 
 
+_FLUX_OUTER_RE = re.compile(r'^flux-([\d.]+)-([\d.]+)([ab])$')
+# Default (fast) mode: only these flux band replicas (keV edges), not e.g. flux-10-1000a.
+_FAST_FLUX_BAND_RE = re.compile(r'^flux-(?:1-10|10-100)[ab]$')
+
+
 def acs_outer_name_from_combined(combined_h5_path: str) -> str:
-    """e.g. .../flux-10-100a/flux-10-100/combined_acs_data.hdf5 -> flux-10-100a"""
-    inner = os.path.dirname(os.path.abspath(combined_h5_path))
-    return os.path.basename(os.path.dirname(inner))
+    """
+    Dataset folder name for a combined HDF5 path.
+
+    Flat (current): ``.../flux-10-100a/combined_acs_data.hdf5`` -> ``flux-10-100a``
+    Legacy nested: ``.../flux-10-100a/flux-10-100/combined_acs_data.hdf5`` -> ``flux-10-100a``
+    """
+    parent = os.path.dirname(os.path.abspath(combined_h5_path))
+    name = os.path.basename(parent)
+    if _FLUX_OUTER_RE.match(name):
+        return name
+    return os.path.basename(os.path.dirname(parent))
 
 
 def find_events_csv(acs_root: str, outer_name: str) -> str | None:
-    """Return path to events.csv under acs_root/<outer>/*/events.csv or None."""
+    """Return path to events.csv under acs_root/<outer>/events.csv or None."""
     import glob
 
+    direct = os.path.join(acs_root, outer_name, 'events.csv')
+    if os.path.isfile(direct):
+        return direct
+    # Legacy nested layout: acs_root/<outer>/*/events.csv
     pattern = os.path.join(acs_root, outer_name, '*', 'events.csv')
     found = sorted(glob.glob(pattern))
     if not found:
         return None
-    if len(found) > 1:
-        # Prefer shortest path / lexicographic first (stable)
-        return found[0]
     return found[0]
-
-
-_FLUX_OUTER_RE = re.compile(r'^flux-([\d.]+)-([\d.]+)([ab])$')
-# Default (fast) mode: only these flux band replicas (keV edges), not e.g. flux-10-1000a.
-_FAST_FLUX_BAND_RE = re.compile(r'^flux-(?:1-10|10-100)[ab]$')
 
 
 def is_fast_flux_dataset_name(name: str) -> bool:
@@ -105,25 +115,68 @@ def acs_datasets_for_mode(acs_root: str, *, complete: bool) -> list[str]:
     return [n for n in all_n if is_fast_flux_dataset_name(n)]
 
 
-def parse_run_scope_argv(argv: Sequence[str] | None = None) -> bool:
-    """
-    Parse ``sys.argv`` (or ``argv``) for ``--complete``.
+DEFAULT_ACS_ROOT_NAME = 'sgrbs-scaled-background-binned-acs'
 
-    Returns True to process the **full** ACS flux suite; False for **fast** mode
-    (only ``flux-1-10`` and ``flux-10-100`` replicas). Unknown arguments are ignored
-    (``parse_known_args``) so IDE runners can coexist with optional flags.
+
+class RunScope(NamedTuple):
+    """CLI run scope: flux-band completeness and ACS data root."""
+
+    complete: bool
+    acs_root: str
+
+
+def default_acs_root(script_dir: str | None = None) -> str:
+    return os.path.join(script_dir or _script_dir_here(), DEFAULT_ACS_ROOT_NAME)
+
+
+def resolve_acs_root(path: str | None, script_dir: str | None = None) -> str:
+    """Resolve ``--acs-root`` against the scripts directory (not cwd)."""
+    base = script_dir or _script_dir_here()
+    if not path:
+        return os.path.abspath(default_acs_root(base))
+    if os.path.isabs(path):
+        return os.path.abspath(path)
+    return os.path.abspath(os.path.join(base, path))
+
+
+def parse_run_scope_argv(
+    argv: Sequence[str] | None = None,
+    *,
+    script_dir: str | None = None,
+) -> RunScope:
+    """
+    Parse ``sys.argv`` (or ``argv``) for ``--complete`` and ``--acs-root``.
+
+    ``complete`` is True to process the **full** ACS flux suite; False for
+    **fast** mode (only ``flux-1-10`` and ``flux-10-100`` replicas).
+    ``acs_root`` is the resolved ACS binned-data directory (default:
+    ``sgrbs-scaled-background-binned-acs`` next to the scripts).
+
+    Unknown arguments are ignored (``parse_known_args``) so IDE runners can
+    coexist with optional flags.
     """
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument(
         '--complete',
         action='store_true',
         help=(
-            'Process all ACS flux datasets under sgrbs-background-binned-acs '
+            'Process all ACS flux datasets under the ACS root '
             '(default: fast mode — only flux-1-10 and flux-10-100 a/b folders).'
         ),
     )
+    parser.add_argument(
+        '--acs-root',
+        default=None,
+        help=(
+            'ACS binned-data directory containing flux-* folders. Relative paths '
+            f'are resolved next to the scripts (default: {DEFAULT_ACS_ROOT_NAME}).'
+        ),
+    )
     ns, _unknown = parser.parse_known_args(args=None if argv is None else list(argv))
-    return ns.complete
+    return RunScope(
+        complete=ns.complete,
+        acs_root=resolve_acs_root(ns.acs_root, script_dir),
+    )
 
 
 def canonical_spurious_source_dataset_name(
@@ -163,7 +216,7 @@ def canonical_spurious_source_dataset_name(
 def expected_acs_dataset_names(acs_root: str) -> list[str]:
     """
     Sorted top-level folder names under ``acs_root`` that contain a catalog
-    ``events.csv`` (same layout as ``sgrbs-background-binned-acs/flux-*``).
+    ``events.csv`` (same layout as ``sgrbs-scaled-background-binned-acs/flux-*``).
     """
     if not os.path.isdir(acs_root):
         return []

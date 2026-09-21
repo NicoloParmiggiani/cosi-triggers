@@ -12,16 +12,17 @@ import trigger_outputs
 # Base directory of this script (so data paths work regardless of cwd)
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Parent of all flux-* ACS binned datasets (each subfolder has .../combined_acs_data.hdf5)
-ACS_ROOT = os.path.join(_SCRIPT_DIR, 'sgrbs-background-binned-acs')
+# Parent of all flux-* ACS binned datasets (each subfolder has combined_acs_data.hdf5)
+ACS_ROOT = trigger_outputs.default_acs_root(_SCRIPT_DIR)
 
 
 def iter_acs_dataset_dirs(acs_root):
     """
     Walk top-level folders under acs_root (e.g. flux-10-100a). Each contains
-    nested .../combined_acs_data.hdf5. Yield (combined_h5_path, output_dir, name)
-    where output_dir is the directory containing the HDF5 (shared npy caches go
-    there) and name is the top-level folder name (used under outputs/run_*/).
+    combined_acs_data.hdf5 directly in that folder. Yield
+    (combined_h5_path, output_dir, name) where output_dir is the directory
+    containing the HDF5 (shared npy caches go there) and name is the top-level
+    folder name (used under outputs/run_*/).
     """
     if not os.path.isdir(acs_root):
         raise FileNotFoundError(f'Missing ACS root: {acs_root}')
@@ -29,10 +30,14 @@ def iter_acs_dataset_dirs(acs_root):
         outer = os.path.join(acs_root, name)
         if not os.path.isdir(outer) or name.startswith('.'):
             continue
+        combined = os.path.join(outer, 'combined_acs_data.hdf5')
+        if os.path.isfile(combined):
+            yield combined, outer, name
+            continue
+        # Legacy nested layout: flux-*/flux-*/combined_acs_data.hdf5
         pattern = os.path.join(outer, '*', 'combined_acs_data.hdf5')
-        for combined in sorted(glob.glob(pattern)):
-            inner_dir = os.path.dirname(combined)
-            yield combined, inner_dir, name
+        for nested in sorted(glob.glob(pattern)):
+            yield nested, os.path.dirname(nested), name
 
 
 def _gamma_proton_energy_bin_weights(energy_edges_kev, split_kev):
@@ -531,12 +536,14 @@ RECOMPUTE_BGO_CACHE = True
 
 
 def main():
-    global data_temporal_resolution, data_energy_bins_low, data_energy_bins_high
+    global ACS_ROOT, data_temporal_resolution, data_energy_bins_low, data_energy_bins_high
 
     data_temporal_resolution, data_energy_bins_low, data_energy_bins_high = read_data_ini(_SCRIPT_DIR)
 
     run_dir = trigger_outputs.new_run_directory(_SCRIPT_DIR)
-    complete = trigger_outputs.parse_run_scope_argv()
+    scope = trigger_outputs.parse_run_scope_argv(script_dir=_SCRIPT_DIR)
+    complete = scope.complete
+    ACS_ROOT = scope.acs_root
     shutil.copy2(
         os.path.join(_SCRIPT_DIR, 'algorithms.ini'),
         os.path.join(run_dir, 'algorithms.ini'),
@@ -550,17 +557,19 @@ def main():
         rf.write(
             'Per-run trigger outputs. algorithms.ini and data.ini are snapshots.\n'
             + mode_note
+            + f'ACS root: {ACS_ROOT}\n'
             + 'algorithms.ini: optional line ``iop_trig_ra_cfg power_n delay_bins`` (COSI RA background); '
             'then per row: index  bin_size  n_chan_over_thresh  phase_steps  '
             f'iop_trig_thresh_cfg[0..{N_IOP_TRIG_CHANNELS - 1}]  '
             f'iop_trig_chan_cfg[0..{N_IOP_TRIG_CHANNELS - 1}] (see parse_algorithms).\n'
             'Subfolders (flux-*) hold triggers.npy for each ACS dataset.\n'
-            'Shared binned caches live next to combined_acs_data.hdf5 under sgrbs-background-binned-acs/:\n'
+            'Shared binned caches live next to combined_acs_data.hdf5 under the ACS root:\n'
             '  bgo_*_binned_counts_gamma_channel.npy, bgo_*_binned_counts_proton_channel.npy, '
             'bin_times.npy, time_reference_s.npy.\n'
         )
     trigger_outputs.write_current_run(_SCRIPT_DIR, run_dir)
     print(f'Run output directory: {run_dir}')
+    print(f'ACS root: {ACS_ROOT}')
     print(
         'ACS scope: '
         + ('all flux datasets (--complete)' if complete else 'fast mode (flux-1-10, flux-10-100 only)')

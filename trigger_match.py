@@ -12,13 +12,15 @@ computed once from the **lowest-flux ``a``** catalog folder (see
 ``trigger_outputs.canonical_spurious_source_dataset_name``) and copied to all
 other expected dataset folders after matching.
 
-Expected ACS flux folders (those with ``events.csv`` under ``sgrbs-background-binned-acs``)
-define the suite. **Fast mode** (default) only includes ``flux-1-10`` and ``flux-10-100``
-``a``/``b`` replicas; pass ``--complete`` to require every ACS flux band. Each dataset
-in scope must have ``triggers.npy`` in the run before ``trigger_qa`` treats the run as
-complete for that scope.
+Expected ACS flux folders (those with ``events.csv`` under the ACS root,
+default ``sgrbs-scaled-background-binned-acs``) define the suite. **Fast mode**
+(default) only includes ``flux-1-10`` and ``flux-10-100`` ``a``/``b`` replicas;
+pass ``--complete`` to require every ACS flux band. Pass ``--acs-root`` to use
+a different ACS tree (for example the unscaled ``sgrbs-background-binned-acs-1-100``).
+Each dataset in scope must have ``triggers.npy`` in the
+run before ``trigger_qa`` treats the run as complete for that scope.
 
-Run this file from the IDE or with optional ``--complete`` on the command line.
+Run this file from the IDE or with optional ``--complete`` / ``--acs-root``.
 """
 
 import csv
@@ -31,7 +33,7 @@ import numpy as np
 import trigger_outputs
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ACS_ROOT = os.path.join(_SCRIPT_DIR, 'sgrbs-background-binned-acs')
+ACS_ROOT = trigger_outputs.default_acs_root(_SCRIPT_DIR)
 
 TRIGGERS_IN = 'triggers.npy'
 MERGED_OUT = 'trigger-merged.npy'
@@ -222,10 +224,14 @@ def crossmatch_events_csv(
 
 
 def main():
+    global ACS_ROOT
     run_dir = trigger_outputs.read_current_run(_SCRIPT_DIR)
     print(f'Current run directory: {run_dir}\n')
 
-    complete = trigger_outputs.parse_run_scope_argv()
+    scope = trigger_outputs.parse_run_scope_argv(script_dir=_SCRIPT_DIR)
+    complete = scope.complete
+    ACS_ROOT = scope.acs_root
+    print(f'ACS root: {ACS_ROOT}')
     expected = trigger_outputs.expected_acs_dataset_names(ACS_ROOT)
     suite = trigger_outputs.acs_datasets_for_mode(ACS_ROOT, complete=complete)
     if expected:
