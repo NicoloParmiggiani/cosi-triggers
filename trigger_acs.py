@@ -87,11 +87,12 @@ def load_combined_acs_bgo_counts_gamma_proton(combined_path, split_kev=2000.0):
     bin into gamma-channel (< split_kev keV) and proton-channel (>= split_kev)
     sums over energy bins (linear apportionment when a bin straddles split_kev).
 
-    Datasets are x0,x1,y0,y1,z0,z1 with shape (n_time_bins, n_energy_bins).
+    Datasets are ACS-A-Z0/Z1, ACS-C-X0/X1, ACS-B-Y0/Y1 with shape
+    (n_time_bins, n_energy_bins).
     Energy bin edges are in 'energy bins (keV)' (typically 80, 2000, inf).
 
     Maps ACS names to the legacy BGO order: b1,b2,x1,x2,y1,y2
-    (z0,z1 → b1,b2; x0,x1 → x1,x2; y0,y1 → y1,y2).
+    (ACS-A-Z0,Z1 → b1,b2; ACS-C-X0,X1 → x1,x2; ACS-B-Y0,Y1 → y1,y2).
 
     Trigger logic uses gamma-channel rates only; proton channels are written to
     disk for downstream analysis.
@@ -103,12 +104,12 @@ def load_combined_acs_bgo_counts_gamma_proton(combined_path, split_kev=2000.0):
         n_time = len(time_edges) - 1
         w_g, w_p = _gamma_proton_energy_bin_weights(energy_edges, split_kev)
         mapping = (
-            ('z0', 'b1'),
-            ('z1', 'b2'),
-            ('x0', 'x1'),
-            ('x1', 'x2'),
-            ('y0', 'y1'),
-            ('y1', 'y2'),
+            ('ACS-A-Z0', 'b1'),
+            ('ACS-A-Z1', 'b2'),
+            ('ACS-C-X0', 'x1'),
+            ('ACS-C-X1', 'x2'),
+            ('ACS-B-Y0', 'y1'),
+            ('ACS-B-Y1', 'y2'),
         )
         counts_gamma = {}
         counts_proton = {}
