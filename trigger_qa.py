@@ -237,12 +237,16 @@ def is_matched_row(mt: float, ma: float, ms: float) -> bool:
 
 def flux_pair_group_key(dataset_name: str) -> str:
     """
-    Map ``flux-1-10a`` / ``flux-1-10b`` → ``flux-1-10``; otherwise return name unchanged.
+    Map ``flux-1-10a`` … ``flux-1-10d`` → ``flux-1-10``; otherwise return name unchanged.
 
-    Only strips a single trailing ``a`` or ``b`` when preceded by a digit (band
+    Only strips a single trailing lowercase letter when preceded by a digit (band
     replicate convention).
     """
-    if len(dataset_name) >= 2 and dataset_name[-1] in 'ab' and dataset_name[-2].isdigit():
+    if (
+        len(dataset_name) >= 2
+        and 'a' <= dataset_name[-1] <= 'z'
+        and dataset_name[-2].isdigit()
+    ):
         return dataset_name[:-1]
     return dataset_name
 
