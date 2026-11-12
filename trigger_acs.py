@@ -689,7 +689,8 @@ def main():
 
         print(
             'Time axis: seconds relative to first bin start; '
-            f'absolute reference (MET) = {time_reference_s} s'
+            f'absolute reference (MET) = {time_reference_s} s. '
+            'Trigger times are written on the absolute (events.csv) timebase.'
         )
 
         # IOP channels ch0..ch11: pairs (gamma, proton) per detector b1,b2,x1,x2,y1,y2
@@ -816,16 +817,17 @@ def main():
                         trigger_significance = float(np.max(pool))
                     if trigger_significance > max_sigma:
                         max_sigma = trigger_significance
+                    trigger_time_s = times[:, 0][time_dx] + time_reference_s
                     if verbose_flag:
                         print(
                             'Trigger identified at '
-                            + '%.2f' % times[:, 0][time_dx]
+                            + '%.2f' % trigger_time_s
                             + ' by algorithm '
                             + str(index)
                             + ' with sigma '
                             + '%.2f' % trigger_significance
                         )
-                    triggers.append([times[:, 0][time_dx], index, trigger_significance])
+                    triggers.append([trigger_time_s, index, trigger_significance])
 
                 if (
                     b1_background_counts
