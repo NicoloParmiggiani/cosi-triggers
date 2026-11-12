@@ -540,6 +540,7 @@ def main():
     global ACS_ROOT, data_temporal_resolution, data_energy_bins_low, data_energy_bins_high
 
     data_temporal_resolution, data_energy_bins_low, data_energy_bins_high = read_data_ini(_SCRIPT_DIR)
+    catalog_t0_met = trigger_outputs.read_catalog_t0_met(_SCRIPT_DIR)
 
     run_dir = trigger_outputs.new_run_directory(_SCRIPT_DIR)
     scope = trigger_outputs.parse_run_scope_argv(script_dir=_SCRIPT_DIR)
@@ -687,10 +688,14 @@ def main():
                 np.save(ref_path, np.float64(time_reference_s))
                 np.save(input_sample_folder + 'bin_times.npy', times)
 
+        catalog_offset_s = (
+            0.0 if catalog_t0_met is None else time_reference_s - catalog_t0_met
+        )
         print(
             'Time axis: seconds relative to first bin start; '
             f'absolute reference (MET) = {time_reference_s} s. '
-            'Trigger times are written on the absolute (events.csv) timebase.'
+            f'Trigger times are written relative to the events.csv zero '
+            f'(first bin = {catalog_offset_s} s).'
         )
 
         # IOP channels ch0..ch11: pairs (gamma, proton) per detector b1,b2,x1,x2,y1,y2
@@ -817,7 +822,7 @@ def main():
                         trigger_significance = float(np.max(pool))
                     if trigger_significance > max_sigma:
                         max_sigma = trigger_significance
-                    trigger_time_s = times[:, 0][time_dx] + time_reference_s
+                    trigger_time_s = times[:, 0][time_dx] + catalog_offset_s
                     if verbose_flag:
                         print(
                             'Trigger identified at '

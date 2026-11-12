@@ -62,6 +62,20 @@ def read_current_run(script_dir: str | None = None) -> str:
     return line
 
 
+def read_catalog_t0_met(ini_dir: str) -> float | None:
+    """
+    Optional third line of ``<ini_dir>/data.ini``: absolute time (MET, s; same
+    timebase as the HDF5 ``time bins (s)``) of the zero of the events.csv
+    ``Start time (s)`` column. None when absent: the catalog zero is then the
+    first ACS bin of each dataset.
+    """
+    with open(os.path.join(ini_dir, 'data.ini'), encoding='utf-8') as f:
+        lines = [ln.strip() for ln in f]
+    if len(lines) >= 3 and lines[2]:
+        return float(lines[2].split()[0])
+    return None
+
+
 _FLUX_OUTER_RE = re.compile(r'^flux-([\d.]+)-([\d.]+)([a-z])$')
 # Default (fast) mode: only these flux band replicas (keV edges), not e.g. flux-10-1000a.
 _FAST_FLUX_BAND_RE = re.compile(r'^flux-(?:1-10|10-100)[a-z]$')

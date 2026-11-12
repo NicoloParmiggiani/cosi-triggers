@@ -691,19 +691,21 @@ def _find_binned_cache_dir(acs_root: str, dataset_name: str) -> str | None:
 
 def _load_detector_gp_counts(
     cache_dir: str,
+    catalog_t0_met: float | None = None,
 ) -> tuple[np.ndarray, dict[str, np.ndarray], dict[str, np.ndarray]]:
     """
     Load bin-start times (s) and the gamma- and proton-channel binned counts for
     each BGO detector from a binned cache directory. ``bin_times.npy`` is relative
-    to the first ACS bin; ``time_reference_s.npy`` is added back so the times share
-    the absolute (events.csv) timebase used for trigger / spurious times.
+    to the first ACS bin; when ``catalog_t0_met`` is set, the times are shifted by
+    ``time_reference_s - catalog_t0_met`` onto the events.csv timebase used for
+    trigger / spurious times (as in ``trigger_acs``).
     """
     times = np.load(os.path.join(cache_dir, 'bin_times.npy'))
     times = np.asarray(times, dtype=np.float64)
     t_start = times[:, 0] if times.ndim == 2 else times
     ref_path = os.path.join(cache_dir, 'time_reference_s.npy')
-    if os.path.isfile(ref_path):
-        t_start = t_start + float(np.load(ref_path))
+    if catalog_t0_met is not None and os.path.isfile(ref_path):
+        t_start = t_start + (float(np.load(ref_path)) - catalog_t0_met)
     gamma: dict[str, np.ndarray] = {}
     proton: dict[str, np.ndarray] = {}
     for det in BGO_DETECTORS:
@@ -923,8 +925,10 @@ def plot_spurious_per_detector_lightcurves(
         )
         return
 
+    run_dir = os.path.dirname(dataset_dir)
     try:
-        t_start, gamma, proton = _load_detector_gp_counts(cache_dir)
+        catalog_t0_met = trigger_outputs.read_catalog_t0_met(run_dir)
+        t_start, gamma, proton = _load_detector_gp_counts(cache_dir, catalog_t0_met)
     except (OSError, ValueError) as e:
         print(f'Skip spurious lightcurves ({label}): {e}')
         return
@@ -937,7 +941,6 @@ def plot_spurious_per_detector_lightcurves(
     dt = float(np.median(np.diff(t_start)))
     fallback_factor = max(1, int(round(SPURIOUS_LC_DISPLAY_BIN_S / dt))) if dt > 0 else 1
 
-    run_dir = os.path.dirname(dataset_dir)
     # Full algorithm config + background window, parsed exactly as trigger_acs did,
     # so per-channel SNRs reproduce the values that fired each trigger.
     algo_full: dict[int, tuple] = {}

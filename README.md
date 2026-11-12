@@ -97,7 +97,8 @@ for fast mode, well over an hour for `--complete`, depending on the machine).
    snapshots both ini files into it, records the run path in
    `outputs/_current_run.txt`, and for each dataset writes
    `<run>/<dataset>/triggers.npy`: one row `[time_s, algorithm, significance]`
-   per firing of any test (times are seconds from the start of the dataset).
+   per firing of any test (times are seconds on the `events.csv` timebase; see
+   `data.ini`).
 2. **`trigger_match.py`** — merges trigger rows within 5 s into single
    triggers keeping the most significant (`trigger-merged.npy`), attaches the
    nearest merged trigger within 5 s of each injected start to the catalog
@@ -164,6 +165,12 @@ Two lines: the ACS time-bin width in seconds (`0.05`), which must match the
 HDF5 files, and the energy bin edges in keV (`80 2000 10000000`), which are
 informational. The gamma/proton split actually applied to the HDF5 energy bins
 is `BGO_GAMMA_PROTON_SPLIT_KEV = 2000.0` in `trigger_acs.py`.
+
+An optional third line gives the MET (s) of the zero of the `Start time (s)`
+column in `events.csv`, i.e. the simulation start (`1835487300.0`). Trigger
+times are written in seconds from that zero, so they compare directly with the
+catalog even when the ACS data start later (e.g. one day after the simulation
+start). Without the line the catalog zero is taken to be the first ACS bin.
 
 ### `gbm_64ms.txt`
 
